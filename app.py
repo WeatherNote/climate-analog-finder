@@ -44,7 +44,11 @@ TEXT = {
         1. 左側のサイドバーで対象月と予想される気候指数(ONI, IOD)を入力します。
         2. PDOの位相条件を選択します。
         3. 「類似年を検索」ボタンを押すと、過去のデータから条件に近い年が表示されます。
-        """
+        """,
+        'ref_title': "参考データ (最新予測)",
+        'iod_link': "IOD予測 (Copernicus)",
+        'enso_link': "ENSO予測 (IRI)",
+        'noaa_link': "NOAA PSL Composites (詳細解析)"
     },
     'en': {
         'title': "Climate Analog Finder",
@@ -70,7 +74,11 @@ TEXT = {
         1. Set the target month and expected indices (ONI, IOD) in the sidebar.
         2. Select the PDO phase condition.
         3. Click "Search Analog Years" to find historical years with similar patterns.
-        """
+        """,
+        'ref_title': "Reference Data (Forecasts)",
+        'iod_link': "IOD Forecast (Copernicus)",
+        'enso_link': "ENSO Forecast (IRI)",
+        'noaa_link': "NOAA PSL Composites"
     }
 }
 
@@ -79,6 +87,15 @@ t = TEXT[st.session_state.lang]
 # --- Sidebar ---
 with st.sidebar:
     st.button(t['lang_btn'], on_click=toggle_lang)
+    
+    # --- Reference Section ---
+    st.header(t['ref_title'])
+    st.markdown(f"""
+    - [{t['iod_link']}](https://climate.copernicus.eu/charts/packages/c3s_seasonal/products/c3s_seasonal_plume_mm?area=iod&base_time=202511010000&type=plume)
+    - [{t['enso_link']}](https://iri.columbia.edu/our-expertise/climate/forecasts/enso/current/?enso_tab=enso-sst_table)
+    """)
+    st.divider()
+
     st.header(t['sidebar_title'])
     
     target_month = st.selectbox(t['target_month'], range(1, 13), index=0)
@@ -190,6 +207,9 @@ if run_search:
             hoverformat="%Y-%m"
         )
         st.plotly_chart(fig, use_container_width=True)
+        
+        # --- NOAA Link ---
+        st.markdown(f"🔗 [{t['noaa_link']}](https://psl.noaa.gov/cgi-bin/data/composites/printpage.pl)")
 
 else:
     # Default view: Just show the graphs of recent data or all data
@@ -213,3 +233,4 @@ else:
         hoverformat="%Y-%m"
     )
     st.plotly_chart(fig, use_container_width=True)
+
