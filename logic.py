@@ -138,6 +138,69 @@ def get_climate_indices(start_year=1950):
     except Exception as e:
         print(f"PNA Error: {e}")
 
+    # --- 7. AO (NOAA CPC) ---
+    url_ao = "https://www.cpc.ncep.noaa.gov/products/precip/CWlink/daily_ao_index/monthly.ao.index.b50.current.ascii.table"
+    try:
+        resp = requests.get(url_ao)
+        lines = resp.text.splitlines()
+        for line in lines:
+            parts = line.split()
+            if not parts or not parts[0].isdigit(): continue
+            year = int(parts[0])
+            if year < start_year: continue
+            for m in range(1, 13):
+                if m <= len(parts) - 1:
+                    try:
+                        val = float(parts[m])
+                        if (year, m) not in data_map: data_map[(year, m)] = {}
+                        data_map[(year, m)]['AO'] = val
+                    except: pass
+    except Exception as e:
+        print(f"AO Error: {e}")
+
+    # --- 8. QBO (NOAA CPC) ---
+    # QBO 30hPa
+    url_qbo30 = "https://www.cpc.ncep.noaa.gov/data/indices/qbo.u30.index"
+    try:
+        resp = requests.get(url_qbo30)
+        lines = resp.text.splitlines()
+        for line in lines:
+            parts = line.split()
+            if not parts or not parts[0].isdigit(): continue
+            year = int(parts[0])
+            if year < start_year: continue
+            for m in range(1, 13):
+                if m <= len(parts) - 1:
+                    try:
+                        val = float(parts[m])
+                        if val > -900: # specific check for potential missing values
+                             if (year, m) not in data_map: data_map[(year, m)] = {}
+                             data_map[(year, m)]['QBO30'] = val
+                    except: pass
+    except Exception as e:
+        print(f"QBO30 Error: {e}")
+
+    # QBO 50hPa
+    url_qbo50 = "https://www.cpc.ncep.noaa.gov/data/indices/qbo.u50.index"
+    try:
+        resp = requests.get(url_qbo50)
+        lines = resp.text.splitlines()
+        for line in lines:
+            parts = line.split()
+            if not parts or not parts[0].isdigit(): continue
+            year = int(parts[0])
+            if year < start_year: continue
+            for m in range(1, 13):
+                if m <= len(parts) - 1:
+                    try:
+                        val = float(parts[m])
+                        if val > -900:
+                            if (year, m) not in data_map: data_map[(year, m)] = {}
+                            data_map[(year, m)]['QBO50'] = val
+                    except: pass
+    except Exception as e:
+        print(f"QBO50 Error: {e}")
+
     # --- DataFrame化 ---
     rows = []
     for (y, m), vals in data_map.items():
@@ -148,7 +211,7 @@ def get_climate_indices(start_year=1950):
     df = pd.DataFrame(rows)
     if not df.empty:
         df = df.sort_values(['Year', 'Month'])
-        cols = ['Year', 'Month', 'ONI', 'IOD', 'PDO', 'NinoWest', 'NAO', 'PNA']
+        cols = ['Year', 'Month', 'ONI', 'IOD', 'PDO', 'NinoWest', 'NAO', 'PNA', 'AO', 'QBO30', 'QBO50']
         existing_cols = [c for c in cols if c in df.columns]
         df = df[existing_cols]
         

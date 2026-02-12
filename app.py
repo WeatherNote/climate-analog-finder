@@ -29,6 +29,9 @@ TEXT = {
         'target_ninowest': "予想 Nino West",
         'target_nao': "予想 NAO",
         'target_pna': "予想 PNA",
+        'target_ao': "予想 AO (北極振動)",
+        'target_qbo30': "予想 QBO (30hPa)",
+        'target_qbo50': "予想 QBO (50hPa)",
         'use': "使用する",
         'pdo_phase': "PDO (太平洋十年規模振動) 位相",
         'pdo_threshold': "PDO 閾値 (絶対値)",
@@ -63,6 +66,9 @@ TEXT = {
         'target_ninowest': "Target Nino West",
         'target_nao': "Target NAO",
         'target_pna': "Target PNA",
+        'target_ao': "Target AO",
+        'target_qbo30': "Target QBO (30hPa)",
+        'target_qbo50': "Target QBO (50hPa)",
         'use': "Use",
         'pdo_phase': "PDO Phase",
         'pdo_threshold': "PDO Threshold (Abs)",
@@ -117,6 +123,9 @@ with st.sidebar:
         {'key': 'NinoWest', 'label': t['target_ninowest'], 'default': 0.0, 'checked': False},
         {'key': 'NAO', 'label': t['target_nao'], 'default': 0.0, 'checked': False},
         {'key': 'PNA', 'label': t['target_pna'], 'default': 0.0, 'checked': False},
+        {'key': 'AO', 'label': t['target_ao'], 'default': 0.0, 'checked': False},
+        {'key': 'QBO30', 'label': t['target_qbo30'], 'default': 0.0, 'checked': False},
+        {'key': 'QBO50', 'label': t['target_qbo50'], 'default': 0.0, 'checked': False},
     ]
     
     targets = {}
@@ -262,7 +271,7 @@ else:
     # Show simple preview graph
     # Show simple preview graph
     # Default indices to show if available
-    default_show = ['ONI', 'IOD', 'PDO', 'NinoWest', 'NAO', 'PNA']
+    default_show = ['ONI', 'IOD', 'PDO', 'NinoWest', 'NAO', 'PNA', 'AO', 'QBO30', 'QBO50']
     avail_show = [c for c in default_show if c in df.columns]
     
     if avail_show:
