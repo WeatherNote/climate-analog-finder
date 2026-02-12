@@ -21,7 +21,7 @@ def toggle_lang():
 # Dictionary for UI text
 TEXT = {
     'ja': {
-        'title': "気候類似年検索ツール (Climate Analog Finder)",
+        'title': "気候類似年検索ツール v1.1 (Climate Analog Finder)",
         'sidebar_title': "検索条件設定",
         'target_month': "対象月",
         'target_oni': "予想 ONI (ENSO)",
