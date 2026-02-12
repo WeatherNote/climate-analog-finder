@@ -26,6 +26,10 @@ TEXT = {
         'target_month': "対象月",
         'target_oni': "予想 ONI (ENSO)",
         'target_iod': "予想 IOD (インド洋ダイポール)",
+        'target_ninowest': "予想 Nino West",
+        'target_nao': "予想 NAO",
+        'target_pna': "予想 PNA",
+        'use': "使用する",
         'pdo_phase': "PDO (太平洋十年規模振動) 位相",
         'pdo_threshold': "PDO 閾値 (絶対値)",
         'num_results': "表示件数",
@@ -56,6 +60,10 @@ TEXT = {
         'target_month': "Target Month",
         'target_oni': "Target ONI (ENSO)",
         'target_iod': "Target IOD",
+        'target_ninowest': "Target Nino West",
+        'target_nao': "Target NAO",
+        'target_pna': "Target PNA",
+        'use': "Use",
         'pdo_phase': "PDO Phase",
         'pdo_threshold': "PDO Threshold (Abs)",
         'num_results': "Number of Results",
@@ -100,8 +108,30 @@ with st.sidebar:
     
     target_month = st.selectbox(t['target_month'], range(1, 13), index=0)
     
-    target_oni = st.number_input(t['target_oni'], value=-0.5, step=0.1)
-    target_iod = st.number_input(t['target_iod'], value=-0.4, step=0.1)
+
+    
+    # Indices Configuration
+    indices_settings = [
+        {'key': 'ONI', 'label': t['target_oni'], 'default': -0.5, 'checked': True},
+        {'key': 'IOD', 'label': t['target_iod'], 'default': -0.4, 'checked': True},
+        {'key': 'NinoWest', 'label': t['target_ninowest'], 'default': 0.0, 'checked': False},
+        {'key': 'NAO', 'label': t['target_nao'], 'default': 0.0, 'checked': False},
+        {'key': 'PNA', 'label': t['target_pna'], 'default': 0.0, 'checked': False},
+    ]
+    
+    targets = {}
+    st.markdown("### Indices")
+    for setting in indices_settings:
+        cols = st.columns([0.2, 0.8])
+        with cols[0]:
+            is_checked = st.checkbox(t['use'], value=setting['checked'], key=f"check_{setting['key']}", label_visibility="collapsed")
+        with cols[1]:
+            val = st.number_input(setting['label'], value=setting['default'], step=0.1, key=f"input_{setting['key']}", disabled=not is_checked)
+        
+        if is_checked:
+            targets[setting['key']] = val
+            
+    st.divider()
     
     pdo_options_map = t['pdo_options']
     # Reverse map for logic
@@ -137,8 +167,7 @@ if run_search:
     results = logic.search_analog_years(
         df, 
         target_month, 
-        target_oni, 
-        target_iod, 
+        targets,
         pdo_phase, 
         pdo_threshold, 
         top_n=top_n
@@ -150,33 +179,51 @@ if run_search:
         st.subheader(t['results_title'])
         
         # Display Results Table
-        display_cols = ['Year', 'Score', 'ONI', 'IOD', 'PDO', 'ONI_Diff', 'IOD_Diff']
+        # Dynamic columns
+        base_cols = ['Year', 'Score', 'PDO']
+        target_cols_list = list(targets.keys())
+        diff_cols = [f"{c}_Diff" for c in target_cols_list]
+        
+        # Sort cols for display
+        display_cols = ['Year', 'Score'] 
+        for c in target_cols_list:
+            display_cols.append(c)
+        if 'PDO' in results.columns:
+            display_cols.append('PDO')
+        for c in diff_cols:
+            display_cols.append(c)
+            
+        # Filter existing columns
+        display_cols = [c for c in display_cols if c in results.columns]
+
+        # Format map
+        fmt = {'Score': '{:.3f}', 'PDO': '{:.2f}'}
+        for c in target_cols_list:
+            fmt[c] = '{:.2f}'
+        for c in diff_cols:
+            fmt[c] = '{:+.2f}'
+
         st.dataframe(
-            results[display_cols].style.format({
-                'Score': '{:.3f}',
-                'ONI': '{:.2f}',
-                'IOD': '{:.2f}',
-                'PDO': '{:.2f}',
-                'ONI_Diff': '{:+.2f}',
-                'IOD_Diff': '{:+.2f}'
-            }),
+            results[display_cols].style.format(fmt),
             use_container_width=True
         )
         
         # --- Visualization ---
         st.subheader(t['graph_title'])
         
+        # Determine what to plot: Used targets + PDO
+        plot_cols = list(targets.keys())
+        if 'PDO' in df.columns and 'PDO' not in plot_cols:
+            plot_cols.append('PDO')
+        
         # Create interactive plot
-        fig = make_subplots(rows=3, cols=1, shared_xaxes=True, 
-                            subplot_titles=("ONI (ENSO)", "IOD", "PDO"))
+        fig = make_subplots(rows=len(plot_cols), cols=1, shared_xaxes=True, 
+                            subplot_titles=plot_cols)
         
         # Full Time Series (Background)
-        fig.add_trace(go.Scatter(x=df['Date'], y=df['ONI'], 
-                                 mode='lines', name='ONI', line=dict(color='gray', width=1), opacity=0.3), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df['Date'], y=df['IOD'], 
-                                 mode='lines', name='IOD', line=dict(color='gray', width=1), opacity=0.3), row=2, col=1)
-        fig.add_trace(go.Scatter(x=df['Date'], y=df['PDO'], 
-                                 mode='lines', name='PDO', line=dict(color='gray', width=1), opacity=0.3), row=3, col=1)
+        for i, col in enumerate(plot_cols):
+            fig.add_trace(go.Scatter(x=df['Date'], y=df[col], 
+                                     mode='lines', name=col, line=dict(color='gray', width=1), opacity=0.3), row=i+1, col=1)
         
         # Highlight Analog Years
         analog_years = results['Year'].tolist()
@@ -190,15 +237,12 @@ if run_search:
             color = colors[i % len(colors)]
             label = f"{year} (Rank {i+1})"
             
-            fig.add_trace(go.Scatter(x=year_data['Date'], y=year_data['ONI'],
-                                     mode='lines+markers', name=f"ONI {label}", line=dict(color=color, width=2)), row=1, col=1)
-            fig.add_trace(go.Scatter(x=year_data['Date'], y=year_data['IOD'],
-                                     mode='lines+markers', name=f"IOD {label}", line=dict(color=color, width=2)), row=2, col=1)
-            fig.add_trace(go.Scatter(x=year_data['Date'], y=year_data['PDO'],
-                                     mode='lines+markers', name=f"PDO {label}", line=dict(color=color, width=2)), row=3, col=1)
+            for j, col in enumerate(plot_cols):
+                fig.add_trace(go.Scatter(x=year_data['Date'], y=year_data[col],
+                                         mode='lines+markers', name=f"{col} {label}", line=dict(color=color, width=2), showlegend=(j==0)), row=j+1, col=1)
 
         fig.update_layout(
-            height=800, 
+            height=250 * len(plot_cols), 
             showlegend=True,
             hovermode="x unified"
         )
@@ -216,21 +260,26 @@ else:
     st.info("👈 " + ("左のサイドバーから条件を設定して検索してください。" if st.session_state.lang == 'ja' else "Configure settings in the sidebar to search."))
     
     # Show simple preview graph
-    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, subplot_titles=("ONI", "IOD", "PDO"))
-    recent_df = df[df['Year'] >= 2000]
+    # Show simple preview graph
+    # Default indices to show if available
+    default_show = ['ONI', 'IOD', 'PDO', 'NinoWest', 'NAO', 'PNA']
+    avail_show = [c for c in default_show if c in df.columns]
     
-    fig.add_trace(go.Scatter(x=recent_df['Date'], y=recent_df['ONI'], name='ONI'), row=1, col=1)
-    fig.add_trace(go.Scatter(x=recent_df['Date'], y=recent_df['IOD'], name='IOD'), row=2, col=1)
-    fig.add_trace(go.Scatter(x=recent_df['Date'], y=recent_df['PDO'], name='PDO'), row=3, col=1)
-    
-    fig.update_layout(
-        height=600, 
-        title_text="Recent Climate Indices (Since 2000)",
-        hovermode="x unified"
-    )
-    fig.update_xaxes(
-        tickformat="%Y-%m",
-        hoverformat="%Y-%m"
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    if avail_show:
+        fig = make_subplots(rows=len(avail_show), cols=1, shared_xaxes=True, subplot_titles=avail_show)
+        recent_df = df[df['Year'] >= 2000]
+        
+        for i, col in enumerate(avail_show):
+            fig.add_trace(go.Scatter(x=recent_df['Date'], y=recent_df[col], name=col), row=i+1, col=1)
+        
+        fig.update_layout(
+            height=200 * len(avail_show), 
+            title_text="Recent Climate Indices (Since 2000)",
+            hovermode="x unified"
+        )
+        fig.update_xaxes(
+            tickformat="%Y-%m",
+            hoverformat="%Y-%m"
+        )
+        st.plotly_chart(fig, use_container_width=True)
 

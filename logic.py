@@ -73,6 +73,71 @@ def get_climate_indices(start_year=1950):
     except Exception as e:
         print(f"PDO Error: {e}")
 
+    # --- 4. Nino West (JMA) ---
+    url_ninowest = "https://www.data.jma.go.jp/cpd/data/elnino/index/ninowidx.html"
+    try:
+        resp = requests.get(url_ninowest)
+        # Simple parsing for <pre> block
+        if "<pre>" in resp.text:
+            pre_content = resp.text.split("<pre>")[1].split("</pre>")[0]
+            lines = pre_content.strip().splitlines()
+            for line in lines:
+                parts = line.split()
+                if not parts or not parts[0].isdigit(): continue
+                year = int(parts[0])
+                if year < start_year: continue
+                # JMA table has Year then 12 months
+                for m in range(1, 13):
+                    if m <= len(parts) - 1:
+                        try:
+                            val = float(parts[m])
+                            if val < 90: # 99.9 is missing
+                                if (year, m) not in data_map: data_map[(year, m)] = {}
+                                data_map[(year, m)]['NinoWest'] = val
+                        except: pass
+    except Exception as e:
+        print(f"NinoWest Error: {e}")
+
+    # --- 5. NAO (NOAA CPC) ---
+    url_nao = "https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.nao.monthly.b5001.current.ascii.table"
+    try:
+        resp = requests.get(url_nao)
+        lines = resp.text.splitlines()
+        for line in lines:
+            parts = line.split()
+            if not parts or not parts[0].isdigit(): continue
+            year = int(parts[0])
+            if year < start_year: continue
+            for m in range(1, 13):
+                if m <= len(parts) - 1:
+                    try:
+                        val = float(parts[m])
+                        if (year, m) not in data_map: data_map[(year, m)] = {}
+                        data_map[(year, m)]['NAO'] = val
+                    except: pass
+    except Exception as e:
+        print(f"NAO Error: {e}")
+
+    # --- 6. PNA (NOAA CPC) ---
+    url_pna = "https://www.cpc.ncep.noaa.gov/products/precip/CWlink/pna/norm.pna.monthly.b5001.current.ascii.table"
+    try:
+        resp = requests.get(url_pna)
+        lines = resp.text.splitlines()
+        for line in lines:
+            parts = line.split()
+            if not parts or not parts[0].isdigit(): continue
+            year = int(parts[0])
+            if year < start_year: continue
+            for m in range(1, 13):
+                if m <= len(parts) - 1:
+                    try:
+                        val = float(parts[m])
+                        if (year, m) not in data_map: data_map[(year, m)] = {}
+                        data_map[(year, m)]['PNA'] = val
+                    except: pass
+    except Exception as e:
+        print(f"PNA Error: {e}")
+
     # --- DataFrame化 ---
     rows = []
     for (y, m), vals in data_map.items():
@@ -83,7 +148,7 @@ def get_climate_indices(start_year=1950):
     df = pd.DataFrame(rows)
     if not df.empty:
         df = df.sort_values(['Year', 'Month'])
-        cols = ['Year', 'Month', 'ONI', 'IOD', 'PDO']
+        cols = ['Year', 'Month', 'ONI', 'IOD', 'PDO', 'NinoWest', 'NAO', 'PNA']
         existing_cols = [c for c in cols if c in df.columns]
         df = df[existing_cols]
         
@@ -92,45 +157,56 @@ def get_climate_indices(start_year=1950):
 def search_analog_years(
     df, 
     target_month, 
-    target_oni, 
-    target_iod, 
+    targets, # dict { 'CurrentColName': val, ... }
     pdo_phase='neg', 
     pdo_threshold=0.5, 
     top_n=5
 ):
     """
     Searches for analog years based on the provided criteria.
+    targets: dict of {column_name: target_value} to be used for distance calculation.
     """
-    # カラム特定
-    oni_col = next((c for c in df.columns if 'ONI' in c or 'NINO' in c), None)
-    iod_col = next((c for c in df.columns if 'IOD' in c or 'DMI' in c), None)
-    
-    if not oni_col or not iod_col:
-        return pd.DataFrame()
-
     # 2. フィルタリング (月)
     candidates = df[df['Month'] == target_month].copy()
     
-    # 3. フィルタリング (PDO位相)
-    candidates = candidates.dropna(subset=['PDO', oni_col, iod_col])
+    # 3. フィルタリング & NaN除去
+    # 必要なカラム(ターゲットになっているもの + PDO)が揃っている行だけ残す
+    # PDO位相チェックが有効ならPDOも必須
+    required_cols = list(targets.keys())
+    if 'PDO' in df.columns:
+        required_cols.append('PDO') # PDO is always used for filtering if present
+
+    # Check if required columns exist in df
+    valid_targets = {k: v for k, v in targets.items() if k in df.columns}
+    if not valid_targets:
+        return pd.DataFrame()
+        
+    candidates = candidates.dropna(subset=[c for c in required_cols if c in candidates.columns])
     
-    if pdo_phase == 'pos':
-        candidates = candidates[candidates['PDO'] >= pdo_threshold]
-    elif pdo_phase == 'neg':
-        candidates = candidates[candidates['PDO'] <= -pdo_threshold]
-    elif pdo_phase == '0':
-        candidates = candidates[
-            (candidates['PDO'] > -pdo_threshold) & 
-            (candidates['PDO'] < pdo_threshold)
-        ]
+    if 'PDO' in candidates.columns:
+        if pdo_phase == 'pos':
+            candidates = candidates[candidates['PDO'] >= pdo_threshold]
+        elif pdo_phase == 'neg':
+            candidates = candidates[candidates['PDO'] <= -pdo_threshold]
+        elif pdo_phase == '0':
+            candidates = candidates[
+                (candidates['PDO'] > -pdo_threshold) & 
+                (candidates['PDO'] < pdo_threshold)
+            ]
     
     if candidates.empty:
         return pd.DataFrame()
 
     # 4. 類似度スコア計算 (ユークリッド距離)
-    candidates['ONI_Diff'] = candidates[oni_col] - target_oni
-    candidates['IOD_Diff'] = candidates[iod_col] - target_iod
-    candidates['Score'] = np.sqrt(candidates['ONI_Diff']**2 + candidates['IOD_Diff']**2)
+    # distance = sqrt( sum( (val - target)^2 ) )
+    
+    # Calculate diffs for display and score
+    sq_diff_sum = 0
+    for col, target_val in valid_targets.items():
+        candidates[f'{col}_Diff'] = candidates[col] - target_val
+        sq_diff_sum += candidates[f'{col}_Diff'] ** 2
+        
+    candidates['Score'] = np.sqrt(sq_diff_sum)
 
     # 5. ソートして返す
     results = candidates.sort_values('Score').head(top_n)
