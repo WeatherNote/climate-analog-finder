@@ -24,3 +24,5 @@ A Streamlit application to find analog climate years based on ONI (ENSO), IOD, a
 - **ONI**: NOAA PSL
 - **IOD**: NOAA PSL (DMI)
 - **PDO**: NOAA NCEI
+- **Nino West**: JMA
+- **NAO/PNA/AO/QBO**: NOAA CPC
